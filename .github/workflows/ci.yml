@@ -1,0 +1,54 @@
+name: kong-plugin
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LuaRocks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 luarocks
+      - name: Lua syntax checks
+        run: |
+          luac -p kong/plugins/h418/handler.lua
+          luac -p kong/plugins/h418/schema.lua
+          luac -p kong/plugins/h418/core.lua
+      - name: Static tests
+        run: |
+          lua spec/core_unit_spec.lua
+          lua spec/static_spec.lua
+      - name: Pack LuaRocks rock
+        run: luarocks make --pack-binary-rock kong-plugin-h418-0.1.0-1.rockspec
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kong-plugin-h418-rock
+          path: "*.rock"
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LuaRocks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 luarocks
+      - name: Publish to LuaRocks
+        env:
+          LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
+        run: luarocks upload --api-key="$LUAROCKS_API_KEY" kong-plugin-h418-0.1.0-1.rockspec
+
